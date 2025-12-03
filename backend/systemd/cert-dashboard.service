@@ -1,0 +1,15 @@
+[Unit]
+Description=Certificate Dashboard Node.js App
+After=network.target
+
+
+[Service]
+User=certsvc
+WorkingDirectory=/opt/cert-dashboard-backend
+EnvironmentFile=/opt/cert-dashboard-backend/.env
+ExecStart=/usr/bin/node /opt/cert-dashboard-backend/server.js
+Restart=always
+
+
+[Install]
+WantedBy=multi-user.target

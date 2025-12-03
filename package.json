@@ -1,0 +1,13 @@
+{
+"name": "cert-dashboard-monorepo",
+"private": true,
+"workspaces": ["frontend", "backend"],
+"scripts": {
+"start:backend": "npm --workspace=backend start",
+"start:frontend": "npm --workspace=frontend start",
+"start": "concurrently \"npm run start:backend\" \"npm run start:frontend\""
+},
+"devDependencies": {
+"concurrently": "^8.0.0"
+}
+}
