@@ -2,6 +2,7 @@ const express = require("express");
 const axios = require("axios");
 const cors = require("cors");
 const fs = require("fs");
+const path = require("path");
 const PDFDocument = require("pdfkit");
 require("dotenv").config();
 
@@ -12,6 +13,13 @@ app.use(express.json());
 const PORT = process.env.PORT || 3000;
 const OJS_API_KEY = process.env.OJS_API_KEY || "ISI_API_KEY_DISINI";
 const OJS_BASE = "https://jmg.bmkg.go.id/jmg/index.php/jmg/api/v1";
+
+// Tambahkan logging ini di bagian atas server.js
+const fullPath = path.join(__dirname, "logo-bmkg.png");
+console.log(`Mencoba membaca logo dari: ${fullPath}`);
+if (!fs.existsSync(fullPath)) {
+    console.error("FATAL: Logo file TIDAK DITEMUKAN. Cek lokasi.");
+}
 
 // ------------------------
 // GET ARTICLE DETAIL
@@ -66,13 +74,16 @@ app.post("/api/certificate", async (req, res) => {
     doc.pipe(res);
 
     // Logo BMKG
-    const logoPath = "./logo-bmkg.png";
+    // GUNAKAN path.join(__dirname, 'nama_file') untuk path absolut
+    const logoPath = path.join(__dirname, "logo-bmkg.png"); // <-- PERUBAHAN KRITIS DI SINI
     if (fs.existsSync(logoPath)) {
       try {
         doc.image(logoPath, 50, 30, { width: 120 });
       } catch (err) {
         console.warn("Logo BMKG error:", err.message);
       }
+    } else {
+	console.error(`Logo file not found at: ${logoPath}`);
     }
 
     // Title
