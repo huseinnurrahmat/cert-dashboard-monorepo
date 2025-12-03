@@ -1,3 +1,4 @@
+// server.js
 const express = require("express");
 const axios = require("axios");
 const cors = require("cors");
@@ -13,9 +14,7 @@ const PORT = process.env.PORT || 3000;
 const OJS_API_KEY = process.env.OJS_API_KEY || "ISI_API_KEY_DISINI";
 const OJS_BASE = "https://jmg.bmkg.go.id/jmg/index.php/jmg/api/v1";
 
-// ------------------------
 // GET ARTICLE DETAIL
-// ------------------------
 app.get("/api/ojs/article/:submissionId", async (req, res) => {
   const { submissionId } = req.params;
 
@@ -27,9 +26,7 @@ app.get("/api/ojs/article/:submissionId", async (req, res) => {
           Authorization: `Bearer ${OJS_API_KEY}`,
           Accept: "application/json",
         },
-        httpsAgent: new (require("https").Agent)({
-          rejectUnauthorized: false,
-        }),
+        httpsAgent: new (require("https").Agent)({ rejectUnauthorized: false }),
       }
     );
 
@@ -44,9 +41,7 @@ app.get("/api/ojs/article/:submissionId", async (req, res) => {
   }
 });
 
-// ------------------------
-// DOWNLOAD CERTIFICATE
-// ------------------------
+// DOWNLOAD CERTIFICATE (Professional Layout)
 app.post("/api/certificate", async (req, res) => {
   const { reviewerName, submissionId, articleTitle, reviewDate } = req.body;
 
@@ -55,7 +50,7 @@ app.post("/api/certificate", async (req, res) => {
   }
 
   try {
-    const doc = new PDFDocument({ size: "A4", layout: "landscape" });
+    const doc = new PDFDocument({ size: "A4", layout: "landscape", margin: 50 });
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
@@ -65,50 +60,81 @@ app.post("/api/certificate", async (req, res) => {
 
     doc.pipe(res);
 
-    // Logo BMKG
-    const logoPath = "./logo-bmkg.png";
-    if (fs.existsSync(logoPath)) {
+    const pageWidth = doc.page.width;
+    const pageHeight = doc.page.height;
+
+    // ------------------------
+    // Background Template
+    // ------------------------
+    const templatePath = "./template-sertifikat.png";
+    if (fs.existsSync(templatePath)) {
       try {
-        doc.image(logoPath, 50, 30, { width: 120 });
+        doc.image(templatePath, 0, 0, { width: pageWidth, height: pageHeight });
       } catch (err) {
-        console.warn("Logo BMKG error:", err.message);
+        console.warn("Template sertifikat error:", err.message);
       }
     }
 
-    // Title
+    // ------------------------
+    // Border
+    // ------------------------
+    doc.rect(30, 30, pageWidth - 60, pageHeight - 60)
+       .lineWidth(2)
+       .strokeColor("#000")
+       .stroke();
+
+    // ------------------------
+    // Watermark BMKG (transparan)
+    // ------------------------
+    const watermarkPath = "./logo-bmkg.png"; // buat transparan
+    if (fs.existsSync(watermarkPath)) {
+      doc.image(watermarkPath, pageWidth / 2 - 100, pageHeight / 2 - 100, {
+        width: 200,
+        opacity: 0.1,
+      });
+    }
+
+    // ------------------------
+    // Title Sertifikat
+    // ------------------------
     doc
-      .fontSize(30)
+      .fontSize(32)
       .fillColor("#000")
       .text("SERTIFIKAT REVIEWER", { align: "center", underline: true });
 
     doc.moveDown(2);
 
-    // Reviewer name
+    // Nama Reviewer
     doc
-      .fontSize(20)
-      .text(`Diberikan kepada: ${reviewerName}`, { align: "center" });
+      .fontSize(28)
+      .fillColor("#003366")
+      .font("Times-Bold")
+      .text(reviewerName, { align: "center" });
 
     doc.moveDown(1);
 
-    // Article title
+    // Judul Artikel
     doc
-      .fontSize(16)
-      .text(`Untuk artikel: "${articleTitle}"`, {
-        align: "center",
-        italics: true,
-      });
+      .fontSize(18)
+      .fillColor("#000")
+      .font("Times-Italic")
+      .text(`Untuk artikel: "${articleTitle}"`, { align: "center" });
 
-    // Review date
     doc.moveDown(1);
-    doc.fontSize(14).text(`Tanggal review: ${reviewDate}`, { align: "center" });
 
-    // Footer
+    // Tanggal Review
+    doc
+      .fontSize(14)
+      .fillColor("#000")
+      .font("Times-Roman")
+      .text(`Tanggal review: ${reviewDate}`, { align: "center" });
+
+    // Footer resmi
     doc.moveDown(4);
     doc
       .fontSize(12)
-      .text("BMKG - Badan Meteorologi, Klimatologi, dan Geofisika", {
-        align: "center",
-      });
+      .fillColor("#000")
+      .text("BMKG - Badan Meteorologi, Klimatologi, dan Geofisika", { align: "center" });
 
     doc.end();
   } catch (err) {

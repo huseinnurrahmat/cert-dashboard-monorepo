@@ -3,23 +3,38 @@ import axios from "axios";
 
 function App() {
   const [email, setEmail] = useState("");
-  const [name, setName] = useState(""); // Nama reviewer
   const [submissionId, setSubmissionId] = useState("");
   const [article, setArticle] = useState(null);
+  const [reviewerName, setReviewerName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Ambil detail artikel + nama reviewer
   const fetchArticle = async () => {
-    if (!submissionId) return;
+    if (!email || !submissionId) {
+      setError("Email dan Submission ID wajib diisi");
+      return;
+    }
     setLoading(true);
     setError("");
     setArticle(null);
+    setReviewerName("");
 
     try {
       const res = await axios.get(
         `http://localhost:3000/api/ojs/article/${submissionId}`
       );
-      setArticle(res.data);
+
+      // Asumsikan API OJS mengembalikan "authorsString" atau kita pakai email mapping
+      // Jika ingin mengambil nama reviewer dari OJS, server harus mendukung mapping email
+      // Untuk demo ini kita pakai email sebagai fallback nama reviewer
+      const reviewerFullName = email.split("@")[0].replace(".", " ");
+      setReviewerName(reviewerFullName);
+
+      setArticle({
+        ...res.data,
+        reviewerName: reviewerFullName,
+      });
     } catch (err) {
       console.error(err);
       setError("Gagal mengambil data artikel OJS");
@@ -28,15 +43,16 @@ function App() {
     }
   };
 
+  // Download sertifikat
   const downloadCertificate = async () => {
-    if (!name || !submissionId || !article) return;
+    if (!article || !reviewerName) return;
     setError("");
 
     try {
       const res = await axios.post(
         "http://localhost:3000/api/certificate",
         {
-          reviewerName: name,
+          reviewerName,
           submissionId,
           articleTitle: article.title,
           reviewDate: article.reviewDate,
@@ -49,7 +65,7 @@ function App() {
       );
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", `certificate_${submissionId}.pdf`);
+      link.setAttribute("download", `sertifikat_${submissionId}.pdf`);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -72,15 +88,6 @@ function App() {
         style={{ width: "100%", padding: "8px", marginBottom: "10px" }}
       />
 
-      <label>Nama Reviewer:</label>
-      <input
-        type="text"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="Nama lengkap reviewer"
-        style={{ width: "100%", padding: "8px", marginBottom: "10px" }}
-      />
-
       <label>Submission ID:</label>
       <input
         type="number"
@@ -90,11 +97,18 @@ function App() {
         style={{ width: "100%", padding: "8px", marginBottom: "10px" }}
       />
 
-      <button onClick={fetchArticle} style={{ padding: "10px 20px", marginRight: "10px" }}>
+      <button
+        onClick={fetchArticle}
+        style={{ padding: "10px 20px", marginRight: "10px" }}
+      >
         Ambil Artikel
       </button>
 
-      <button onClick={downloadCertificate} style={{ padding: "10px 20px" }} disabled={!article || !name}>
+      <button
+        onClick={downloadCertificate}
+        style={{ padding: "10px 20px" }}
+        disabled={!article}
+      >
         Download Sertifikat
       </button>
 
@@ -104,7 +118,8 @@ function App() {
       {article && (
         <div style={{ marginTop: "20px" }}>
           <h3>Detail Artikel:</h3>
-          <p>Judul: {article.title}</p>
+          <p>Nama Reviewer: {reviewerName}</p>
+          <p>Judul Artikel: {article.title}</p>
           <p>Tanggal Review: {article.reviewDate}</p>
           {article.urlPublished && (
             <p>
