@@ -2,6 +2,7 @@ const express = require("express");
 const axios = require("axios");
 const cors = require("cors");
 const fs = require("fs");
+const path = require("path"); // Ditambahkan untuk penanganan path yang akurat
 const PDFDocument = require("pdfkit");
 require("dotenv").config();
 
@@ -13,113 +14,155 @@ const PORT = process.env.PORT || 3000;
 const OJS_API_KEY = process.env.OJS_API_KEY || "ISI_API_KEY_DISINI";
 const OJS_BASE = "https://jmg.bmkg.go.id/jmg/index.php/jmg/api/v1";
 
-// ------------------------
-// GET ARTICLE DETAIL
-// ------------------------
+// =================================================================
+// 1. GET ARTICLE DETAIL
+// =================================================================
 app.get("/api/ojs/article/:submissionId", async (req, res) => {
-  const { submissionId } = req.params;
+    const { submissionId } = req.params;
 
-  try {
-    const response = await axios.get(
-      `${OJS_BASE}/submissions/${submissionId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${OJS_API_KEY}`,
-          Accept: "application/json",
-        },
-        httpsAgent: new (require("https").Agent)({
-          rejectUnauthorized: false,
-        }),
-      }
-    );
+    try {
+        const response = await axios.get(
+            `${OJS_BASE}/submissions/${submissionId}`,
+            {
+                headers: {
+                    Authorization: `Bearer ${OJS_API_KEY}`,
+                    Accept: "application/json",
+                },
+                httpsAgent: new (require("https").Agent)({
+                    rejectUnauthorized: false,
+                }),
+            }
+        );
 
-    const data = response.data;
-    const title = data?.publications?.[0]?.title?.en_US ?? "Judul tidak ditemukan";
-    const date = data?.lastModified?.split(" ")[0] ?? "";
+        const data = response.data;
+        const title = data?.publications?.[0]?.title?.en_US ?? "Judul tidak ditemukan";
+        // Asumsi reviewDate diambil dari lastModified. Format YYYY-MM-DD
+        const date = data?.lastModified?.split(" ")[0] ?? ""; 
 
-    res.json({ title, reviewDate: date, urlPublished: data?.publications?.[0]?.urlPublished || "" });
-  } catch (err) {
-    console.error("ERROR ARTICLE:", err.response?.data || err.message);
-    res.status(500).json({ error: "Gagal mengambil data artikel OJS" });
-  }
+        res.json({ title, reviewDate: date, urlPublished: data?.publications?.[0]?.urlPublished || "" });
+    } catch (err) {
+        console.error("ERROR ARTICLE:", err.response?.data || err.message);
+        res.status(500).json({ error: "Gagal mengambil data artikel OJS" });
+    }
 });
 
-// ------------------------
-// DOWNLOAD CERTIFICATE
-// ------------------------
+// =================================================================
+// 2. DOWNLOAD CERTIFICATE
+// =================================================================
 app.post("/api/certificate", async (req, res) => {
-  const { reviewerName, submissionId, articleTitle, reviewDate } = req.body;
+    const { reviewerName, submissionId, articleTitle, reviewDate } = req.body;
 
-  if (!reviewerName || !submissionId || !articleTitle) {
-    return res.status(400).json({ error: "Data tidak lengkap" });
-  }
-
-  try {
-    const doc = new PDFDocument({ size: "A4", layout: "landscape" });
-
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename=sertifikat_${submissionId}.pdf`
-    );
-
-    doc.pipe(res);
-
-    // Logo BMKG
-    const logoPath = "./logo-bmkg.png";
-    if (fs.existsSync(logoPath)) {
-      try {
-        doc.image(logoPath, 50, 30, { width: 120 });
-      } catch (err) {
-        console.warn("Logo BMKG error:", err.message);
-      }
+    if (!reviewerName || !submissionId || !articleTitle) {
+        return res.status(400).json({ error: "Data tidak lengkap" });
     }
 
-    // Title
-    doc
-      .fontSize(30)
-      .fillColor("#000")
-      .text("SERTIFIKAT REVIEWER", { align: "center", underline: true });
+    try {
+        const doc = new PDFDocument({ size: "A4", layout: "landscape" }); // Ukuran A4 Landscape (792 x 612 poin)
 
-    doc.moveDown(2);
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader(
+            "Content-Disposition",
+            `attachment; filename=sertifikat_${submissionId}.pdf`
+        );
 
-    // Reviewer name
-    doc
-      .fontSize(20)
-      .text(`Diberikan kepada: ${reviewerName}`, { align: "center" });
+        doc.pipe(res);
 
-    doc.moveDown(1);
+        // --- 2.1. APLIKASI TEMPLATE BACKGROUND ---
+        const templatePath = path.join(__dirname, "template-sertifikat.png");
 
-    // Article title
-    doc
-      .fontSize(16)
-      .text(`Untuk artikel: "${articleTitle}"`, {
-        align: "center",
-        italics: true,
-      });
+        if (fs.existsSync(templatePath)) {
+            try {
+                // Gambar template dimuat mengisi seluruh halaman
+                doc.image(templatePath, 0, 0, { 
+                    width: doc.page.width,
+                    height: doc.page.height,
+                });
+            } catch (err) {
+                console.warn("Template image error (Cek format file!):", err.message);
+            }
+        } else {
+            // Jika template tidak ditemukan, beri peringatan keras
+            doc.fillColor("red").text("ERROR: Template Sertifikat Tidak Ditemukan!", { align: "center" });
+        }
 
-    // Review date
-    doc.moveDown(1);
-    doc.fontSize(14).text(`Tanggal review: ${reviewDate}`, { align: "center" });
 
-    // Footer
-    doc.moveDown(4);
-    doc
-      .fontSize(12)
-      .text("BMKG - Badan Meteorologi, Klimatologi, dan Geofisika", {
-        align: "center",
-      });
+        // --- 2.2. PENEMPATAN TEKS (Font Elegan & Profesional) ---
+        
+        // Font Times-Roman (Formal)
+        doc.font('Times-Roman').fillColor("#000"); 
+        
+        // Judul Utama (Sertifikat)
+        // Koordinat Y: 150 (Asumsi di area atas template)
+        doc.x = 0; 
+        doc.y = 150; 
+        doc
+            .fontSize(36)
+            .font('Times-Bold') // Font lebih tebal untuk judul
+            .text("SERTIFIKAT PENGHARGAAN", { align: "center" });
 
-    doc.end();
-  } catch (err) {
-    console.error("CERTIFICATE ERROR:", err.message);
-    if (!res.headersSent) {
-      res.status(500).json({ error: "Gagal membuat sertifikat" });
+        doc.moveDown(0.5); // Spasi
+
+        // Teks Penghargaan
+        doc.fontSize(16).font('Times-Roman');
+        doc.text("Dengan hormat diberikan kepada:", { align: "center" });
+
+        doc.moveDown(0.5); // Spasi
+
+        // Nama Reviewer
+        // Koordinat Y: 250 (Asumsi di area tengah template)
+        doc.y = 250; 
+        doc
+            .fontSize(30)
+            .font('Times-BoldItalic') // Gabungan bold dan italic untuk penekanan
+            .text(reviewerName.toUpperCase(), { align: "center" });
+        
+        doc.moveDown(1.5); // Spasi
+
+        // Teks Atas Artikel
+        doc.fontSize(16).font('Times-Roman');
+        doc.text("Atas kontribusi sebagai reviewer artikel ilmiah:", { align: "center" });
+        
+        doc.moveDown(0.5); // Spasi
+
+        // Judul Artikel
+        doc.x = 50; 
+        
+        doc
+	    .fontSize(20)
+            .font('Times-Italic') // Italic untuk judul artikel
+            .text(`"${articleTitle}"`, {
+                align: "center",
+                indent: 0, // Hapus indent
+                // Langkah Kritis 2: Hitung lebar yang menyisakan margin simetris
+                width: doc.page.width - 100 
+            });
+
+        // Informasi Tambahan (Tanggal Review)
+        doc.moveDown(1.5);
+	doc.x = 0;
+        doc.fontSize(14).font('Times-Roman').text(`Tanggal Review: ${reviewDate}`, { 
+            align: "center" 
+        });
+
+        // Informasi Penutup (Asumsi di area bawah template, y=450)
+        doc.y = 500;
+        doc
+            .fontSize(12)
+            .font('Times-Roman')
+            .text("Sertifikat ini diberikan sebagai bentuk apresiasi atas dedikasi dalam menjaga kualitas publikasi ilmiah.", {
+                align: "center",
+            });
+
+
+        doc.end();
+    } catch (err) {
+        console.error("CERTIFICATE ERROR:", err.message);
+        if (!res.headersSent) {
+            res.status(500).json({ error: "Gagal membuat sertifikat" });
+        }
     }
-  }
 });
 
 app.listen(PORT, () => {
-  console.log(`Backend berjalan di port ${PORT}`);
+    console.log(`Backend berjalan di port ${PORT}`);
 });
-
